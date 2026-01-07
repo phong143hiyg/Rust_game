@@ -31,7 +31,7 @@ impl Enemy {
     }
     
     fn update_ai(&mut self, player_pos: Point) {
-        use macroquad::rand::gen_range;
+        // Using macroquad::rand::rand() instead
         use macroquad::rand::rand;
         
         // Simple AI: 70% chance to move toward player, 30% random

@@ -11,6 +11,7 @@ impl Point {
         Self { x, y }
     }
     
+    #[allow(dead_code)]
     pub fn zero() -> Self {
         Self { x: 0.0, y: 0.0 }
     }
@@ -23,6 +24,7 @@ pub struct Size {
 }
 
 impl Size {
+    #[allow(dead_code)]
     pub fn new(w: i32, h: i32) -> Self {
         Self { w, h }
     }
@@ -40,7 +42,8 @@ impl Rect {
     pub fn new(x: i32, y: i32, w: i32, h: i32) -> Self {
         Self { x, y, w, h }
     }
-    
+
+    #[allow(dead_code)]
     pub fn contains(&self, point: Point) -> bool {
         point.x >= self.x as f32 
             && point.x < (self.x + self.w) as f32
@@ -54,7 +57,8 @@ impl Rect {
             && self.y < other.y + other.h
             && self.y + self.h > other.y
     }
-    
+
+    #[allow(dead_code)]
     pub fn to_macroquad(&self) -> macroquad::prelude::Rect {
         macroquad::prelude::Rect::new(
             self.x as f32,

@@ -1,5 +1,6 @@
 use crate::engine::types::{Size, Rect};
 
+#[allow(dead_code)]
 pub struct Config {
     pub window_title: &'static str,
     pub window_size: Size,
@@ -8,6 +9,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             window_title: "Tanks",

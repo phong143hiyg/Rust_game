@@ -4,10 +4,12 @@ use crate::engine::types::Direction;
 pub struct Input;
 
 impl Input {
+    #[allow(dead_code)]
     pub fn is_key_down(key: KeyCode) -> bool {
         is_key_down(key)
     }
-    
+
+    #[allow(dead_code)]
     pub fn is_key_pressed(key: KeyCode) -> bool {
         is_key_pressed(key)
     }
@@ -29,7 +31,8 @@ impl Input {
     pub fn is_fire_pressed() -> bool {
         is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter)
     }
-    
+
+    #[allow(dead_code)]
     pub fn is_escape_pressed() -> bool {
         is_key_pressed(KeyCode::Escape)
     }

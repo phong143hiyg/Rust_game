@@ -50,7 +50,8 @@ impl Tank {
             self.fire_cooldown -= dt;
         }
     }
-    
+
+    #[allow(dead_code)]
     pub fn move_in_direction(&mut self, direction: Direction, dt: f32, collision_map: &[Vec<bool>]) {
         self.direction = direction;
         let (dx, dy) = direction.to_velocity(self.speed * dt);
@@ -60,7 +61,8 @@ impl Tank {
             self.position = new_pos;
         }
     }
-    
+
+    #[allow(dead_code)]
     pub fn turn(&mut self, new_direction: Direction) {
         self.direction = new_direction;
     }
@@ -115,7 +117,8 @@ impl Tank {
             32,
         )
     }
-    
+
+    #[allow(dead_code)]
     fn can_move_to(&self, pos: Point, collision_map: &[Vec<bool>]) -> bool {
         let bounds = Rect::new(pos.x as i32, pos.y as i32, 32, 32);
         

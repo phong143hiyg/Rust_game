@@ -1,7 +1,7 @@
 use macroquad::prelude::*;
 use crate::app_state::AppState;
 use crate::engine::input::Input;
-use crate::engine::types::{Direction, Point, Rect};
+use crate::engine::types::{Point, Rect};
 use crate::objects::*;
 use crate::Resources;
 

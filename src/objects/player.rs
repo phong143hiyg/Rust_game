@@ -1,4 +1,4 @@
-use crate::engine::types::{Point, Direction, Rect};
+// Types are used through Tank struct
 use crate::objects::{Tank, TankType};
 use macroquad::prelude::*;
 

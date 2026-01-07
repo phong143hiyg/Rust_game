@@ -1,13 +1,15 @@
 use macroquad::prelude::*;
-use crate::engine::types::{Rect, Point};
+use crate::engine::types::Rect;
 
 pub struct Renderer;
 
 impl Renderer {
+    #[allow(dead_code)]
     pub fn clear(color: Color) {
         clear_background(color);
     }
-    
+
+    #[allow(dead_code)]
     pub fn draw_texture_at(texture: &Texture2D, x: f32, y: f32, width: f32, height: f32, rotation: f32) {
         draw_texture_ex(
             texture,
@@ -21,7 +23,8 @@ impl Renderer {
             },
         );
     }
-    
+
+    #[allow(dead_code)]
     pub fn draw_rect(rect: Rect, color: Color) {
         draw_rectangle(
             rect.x as f32,
@@ -31,7 +34,8 @@ impl Renderer {
             color,
         );
     }
-    
+
+    #[allow(dead_code)]
     pub fn draw_rect_outline(rect: Rect, thickness: f32, color: Color) {
         draw_rectangle_lines(
             rect.x as f32,
@@ -42,7 +46,8 @@ impl Renderer {
             color,
         );
     }
-    
+
+    #[allow(dead_code)]
     pub fn draw_text_centered(text: &str, x: f32, y: f32, font_size: f32, color: Color) {
         let text_dims = measure_text(text, None, font_size as u16, 1.0);
         draw_text(

@@ -1,6 +1,5 @@
 use macroquad::prelude::*;
 use crate::app_state::AppState;
-use crate::engine::input::Input;
 
 pub struct MenuState {
     selected_option: usize,

@@ -108,7 +108,7 @@ impl Resources {
     }
     
     fn create_fallback_texture(width: u16, height: u16, color: Color) -> Texture2D {
-        let mut image = Image::gen_image_color(width, height, color);
+        let image = Image::gen_image_color(width, height, color);
         Texture2D::from_image(&image)
     }
 }
