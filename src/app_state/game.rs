@@ -5,11 +5,18 @@ use crate::engine::types::{Point, Rect};
 use crate::objects::*;
 use crate::Resources;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameMode {
+    Coop,      // Co-op against enemies
+    Solo,      // PvP - players fight each other
+}
+
 pub struct GameState {
     player: Player,
     player2: Option<Player>,
     #[allow(dead_code)]
     num_players: u8,
+    game_mode: GameMode,
     enemies: Vec<Enemy>,
     bullets: Vec<Bullet>,
     bricks: Vec<Brick>,
@@ -30,18 +37,27 @@ pub struct GameState {
 impl GameState {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        Self::new_with_players(1)
+        Self::new_with_mode(1, GameMode::Coop)
     }
     
     pub fn new_with_players(num_players: u8) -> Self {
+        Self::new_with_mode(num_players, GameMode::Coop)
+    }
+    
+    pub fn new_solo() -> Self {
+        Self::new_with_mode(2, GameMode::Solo)
+    }
+    
+    pub fn new_with_mode(num_players: u8, game_mode: GameMode) -> Self {
         let mut state = Self {
             player: Player::new(250.0, 400.0),
-            player2: if num_players == 2 {
+            player2: if num_players == 2 || game_mode == GameMode::Solo {
                 Some(Player::new_with_type(350.0, 400.0, TankType::Player2))
             } else {
                 None
             },
             num_players,
+            game_mode,
             enemies: Vec::new(),
             bullets: Vec::new(),
             bricks: Vec::new(),
@@ -63,6 +79,65 @@ impl GameState {
         state
     }
     
+    fn get_spawn_position(&self, current_x: f32, current_y: f32, is_player2: bool) -> (f32, f32) {
+        use macroquad::rand::rand;
+        
+        let spawn_positions = vec![
+            (100.0, 400.0),
+            (200.0, 400.0),
+            (300.0, 400.0),
+            (400.0, 400.0),
+            (500.0, 400.0),
+            (150.0, 300.0),
+            (450.0, 300.0),
+            (300.0, 500.0),
+        ];
+        
+        // Filter out positions too close to death position (within 100 pixels)
+        // and positions that have bricks (check collision map)
+        let valid_positions: Vec<(f32, f32)> = spawn_positions
+            .into_iter()
+            .filter(|(x, y)| {
+                // Check distance from death position
+                let dx = x - current_x;
+                let dy = y - current_y;
+                let far_enough = (dx * dx + dy * dy).sqrt() > 100.0;
+                
+                // Check if position is free (no brick at that tile)
+                // Tank is 32x32, so check the tile it would occupy
+                let tile_x = (*x / 32.0) as usize;
+                let tile_y = (*y / 32.0) as usize;
+                let is_free = tile_x < 20 && tile_y < 20 && !self.collision_map[tile_y][tile_x];
+                
+                far_enough && is_free
+            })
+            .collect();
+        
+        if valid_positions.is_empty() {
+            // Fallback: find any free position on the map
+            for _ in 0..100 {
+                let x = ((rand() % 18) + 1) as f32 * 32.0;
+                let y = ((rand() % 18) + 1) as f32 * 32.0;
+                let tile_x = (x / 32.0) as usize;
+                let tile_y = (y / 32.0) as usize;
+                
+                if tile_x < 20 && tile_y < 20 && !self.collision_map[tile_y][tile_x] {
+                    return (x, y);
+                }
+            }
+            
+            // Last resort: use default positions
+            if is_player2 {
+                (400.0, 400.0)
+            } else {
+                (200.0, 400.0)
+            }
+        } else {
+            let idx = (rand() as usize) % valid_positions.len();
+            valid_positions[idx]
+        }
+    }
+    
     fn load_level(&mut self) {
         // Clear existing entities
         self.enemies.clear();
@@ -70,26 +145,35 @@ impl GameState {
         self.bricks.clear();
         self.bonuses.clear();
         
-        // Reset player and eagle positions
+        // Reset player positions
         self.player.reset_position(200.0, 400.0);
         if let Some(ref mut p2) = self.player2 {
             p2.reset_position(400.0, 400.0);
         }
-        self.eagle = Eagle::new(300.0, 540.0); // Eagle at bottom
         
-        // Define protected zones (no bricks allowed)
-        let protected_zones = vec![
-            // Player 1 spawn area
-            (4, 8, 11, 14),
-            // Player 2 spawn area  
-            (11, 15, 11, 14),
-            // Eagle area with protective walls and entrance
-            (7, 12, 13, 18),
-            // Enemy spawn areas
-            (2, 5, 1, 3),
-            (7, 10, 1, 3),
-            (12, 15, 1, 3),
-        ];
+        // In Solo mode, no eagle or eagle walls
+        let protected_zones = if self.game_mode == GameMode::Solo {
+            vec![
+                // Player 1 spawn area
+                (4, 8, 11, 14),
+                // Player 2 spawn area  
+                (11, 15, 11, 14),
+            ]
+        } else {
+            self.eagle = Eagle::new(300.0, 540.0); // Eagle at bottom
+            vec![
+                // Player 1 spawn area
+                (4, 8, 11, 14),
+                // Player 2 spawn area  
+                (11, 15, 11, 14),
+                // Eagle area with protective walls and entrance
+                (7, 12, 13, 18),
+                // Enemy spawn areas
+                (2, 5, 1, 3),
+                (7, 10, 1, 3),
+                (12, 15, 1, 3),
+            ]
+        };
         
         // Create border walls (indestructible)
         for x in 0..20 {
@@ -101,23 +185,25 @@ impl GameState {
             self.bricks.push(Brick::new_with_flags(19.0 * 32.0, y as f32 * 32.0, brick::BrickType::Steel, true));
         }
         
-        // Add protective brick walls around the eagle (breakable)
-        // Eagle is at tile position (9, 16) - at (300, 540) in pixels = (300/32, 540/32) = (9.375, 16.875)
-        let eagle_tile_x = 9;
-        let eagle_tile_y = 16;
-        
-        // Create a complete box of breakable bricks around the eagle
-        for dx in -2..=2_i32 {
-            for dy in -2..=2_i32 {
-                let tx = eagle_tile_x + dx;
-                let ty = eagle_tile_y + dy;
-                
-                // Only place bricks on the perimeter, not inside or on the eagle
-                let is_perimeter = dx.abs() == 2 || dy.abs() == 2;
-                let not_on_eagle = !(dx == 0 && dy == 0);
-                
-                if is_perimeter && not_on_eagle && tx > 0 && tx < 19 && ty > 0 && ty < 19 {
-                    self.bricks.push(Brick::new(tx as f32 * 32.0, ty as f32 * 32.0, brick::BrickType::Normal));
+        // Add protective brick walls around the eagle (only in Coop mode)
+        if self.game_mode == GameMode::Coop {
+            // Eagle is at tile position (9, 16) - at (300, 540) in pixels = (300/32, 540/32) = (9.375, 16.875)
+            let eagle_tile_x = 9;
+            let eagle_tile_y = 16;
+            
+            // Create a complete box of breakable bricks around the eagle
+            for dx in -2..=2_i32 {
+                for dy in -2..=2_i32 {
+                    let tx = eagle_tile_x + dx;
+                    let ty = eagle_tile_y + dy;
+                    
+                    // Only place bricks on the perimeter, not inside or on the eagle
+                    let is_perimeter = dx.abs() == 2 || dy.abs() == 2;
+                    let not_on_eagle = !(dx == 0 && dy == 0);
+                    
+                    if is_perimeter && not_on_eagle && tx > 0 && tx < 19 && ty > 0 && ty < 19 {
+                        self.bricks.push(Brick::new(tx as f32 * 32.0, ty as f32 * 32.0, brick::BrickType::Normal));
+                    }
                 }
             }
         }
@@ -153,26 +239,28 @@ impl GameState {
             }
         }
         
-        // Spawn enemies in safe positions
-        let enemy_count = 3.min(3 + self.level);
-        let enemy_spawn_positions = vec![
-            (100.0, 64.0),
-            (300.0, 64.0),
-            (450.0, 64.0),
-            (200.0, 64.0),
-            (380.0, 64.0),
-        ];
-        
-        for i in 0..enemy_count {
-            let tank_type = match rand() % 4 {
-                0 => TankType::BasicEnemy,
-                1 => TankType::FastEnemy,
-                2 => TankType::PowerEnemy,
-                _ => TankType::ArmorEnemy,
-            };
+        // Spawn enemies only in Coop mode
+        if self.game_mode == GameMode::Coop {
+            let enemy_count = 3.min(3 + self.level);
+            let enemy_spawn_positions = vec![
+                (100.0, 64.0),
+                (300.0, 64.0),
+                (450.0, 64.0),
+                (200.0, 64.0),
+                (380.0, 64.0),
+            ];
             
-            let pos = enemy_spawn_positions[i as usize % enemy_spawn_positions.len()];
-            self.enemies.push(Enemy::new(pos.0, pos.1, tank_type));
+            for i in 0..enemy_count {
+                let tank_type = match rand() % 4 {
+                    0 => TankType::BasicEnemy,
+                    1 => TankType::FastEnemy,
+                    2 => TankType::PowerEnemy,
+                    _ => TankType::ArmorEnemy,
+                };
+                
+                let pos = enemy_spawn_positions[i as usize % enemy_spawn_positions.len()];
+                self.enemies.push(Enemy::new(pos.0, pos.1, tank_type));
+            }
         }
         
         // Update collision map
@@ -366,30 +454,52 @@ impl GameState {
         self.bricks.retain(|b| !b.is_destroyed);
         
         // Check win/lose conditions
-        if self.enemies_killed >= self.total_enemies && self.enemies.is_empty() {
-            // All enemies defeated - advance to next level
-            if self.level < self.max_level {
-                self.advance_to_next_level();
-            } else {
-                // Completed all levels!
+        if self.game_mode == GameMode::Solo {
+            // In Solo mode, check if one player has won
+            if self.player.is_game_over() {
+                // Player 2 wins
                 self.victory = true;
                 self.game_over = true;
-            }
-        }
-        
-        if !self.eagle.is_alive || self.player.is_game_over() {
-            // In 2 player mode, check if both players are out
-            if let Some(ref player2) = self.player2 {
+            } else if let Some(ref player2) = self.player2 {
                 if player2.is_game_over() {
+                    // Player 1 wins
+                    self.victory = true;
                     self.game_over = true;
                 }
-            } else {
-                self.game_over = true;
+            }
+        } else {
+            // Coop mode win/lose conditions
+            if self.enemies_killed >= self.total_enemies && self.enemies.is_empty() {
+                // All enemies defeated - advance to next level
+                if self.level < self.max_level {
+                    self.advance_to_next_level();
+                } else {
+                    // Completed all levels!
+                    self.victory = true;
+                    self.game_over = true;
+                }
+            }
+            
+            if !self.eagle.is_alive || self.player.is_game_over() {
+                // In 2 player mode, check if both players are out
+                if let Some(ref player2) = self.player2 {
+                    if player2.is_game_over() {
+                        self.game_over = true;
+                    }
+                } else {
+                    self.game_over = true;
+                }
             }
         }
     }
     
     fn check_collisions(&mut self) {
+        // Track respawn needs
+        let mut player1_needs_respawn = false;
+        let mut player1_death_pos = (0.0, 0.0);
+        let mut player2_needs_respawn = false;
+        let mut player2_death_pos = (0.0, 0.0);
+        
         // Bullet vs Brick
         for bullet in &mut self.bullets {
             for brick in &mut self.bricks {
@@ -408,30 +518,39 @@ impl GameState {
             }
             
             // Bullet vs Player
+            // In Solo mode, players can shoot each other
+            // In Coop mode, only enemies can shoot players
             if matches!(bullet.owner_type, TankType::BasicEnemy | TankType::FastEnemy 
-                | TankType::PowerEnemy | TankType::ArmorEnemy) {
+                | TankType::PowerEnemy | TankType::ArmorEnemy) 
+                || (self.game_mode == GameMode::Solo && bullet.owner_type == TankType::Player2) {
                 if bullet.get_bounds().intersects(&self.player.tank.get_bounds()) {
                     self.player.tank.take_damage(bullet.damage);
                     bullet.deactivate();
                     
                     if !self.player.tank.is_alive {
+                        player1_death_pos = (self.player.tank.position.x, self.player.tank.position.y);
                         self.player.lose_life();
                         if !self.player.is_game_over() {
-                            self.player.reset_position(200.0, 400.0);
+                            player1_needs_respawn = true;
                         }
                     }
                 }
+            }
                 
-                // Bullet vs Player 2
+            // Bullet vs Player 2
+            if (matches!(bullet.owner_type, TankType::BasicEnemy | TankType::FastEnemy 
+                | TankType::PowerEnemy | TankType::ArmorEnemy)
+                || (self.game_mode == GameMode::Solo && bullet.owner_type == TankType::Player)) {
                 if let Some(ref mut player2) = self.player2 {
                     if bullet.get_bounds().intersects(&player2.tank.get_bounds()) {
                         player2.tank.take_damage(bullet.damage);
                         bullet.deactivate();
                         
                         if !player2.tank.is_alive {
+                            player2_death_pos = (player2.tank.position.x, player2.tank.position.y);
                             player2.lose_life();
                             if !player2.is_game_over() {
-                                player2.reset_position(400.0, 400.0);
+                                player2_needs_respawn = true;
                             }
                         }
                     }
@@ -522,7 +641,21 @@ impl GameState {
             }
         }
         
+        // Update collision map before respawning
         self.update_collision_map();
+        
+        // Handle respawns after all collision checks
+        if player1_needs_respawn {
+            let (new_x, new_y) = self.get_spawn_position(player1_death_pos.0, player1_death_pos.1, false);
+            self.player.reset_position(new_x, new_y);
+        }
+        
+        if player2_needs_respawn {
+            let (new_x, new_y) = self.get_spawn_position(player2_death_pos.0, player2_death_pos.1, true);
+            if let Some(ref mut player2) = self.player2 {
+                player2.reset_position(new_x, new_y);
+            }
+        }
     }
     
     fn spawn_enemy(&mut self) {
@@ -633,8 +766,10 @@ impl GameState {
             brick.draw(&resources.brick, &resources.stone);
         }
         
-        // Draw eagle
-        self.eagle.draw(&resources.eagle);
+        // Draw eagle (only in Coop mode)
+        if self.game_mode == GameMode::Coop {
+            self.eagle.draw(&resources.eagle);
+        }
         
         // Draw bonuses
         for bonus in &self.bonuses {
@@ -701,17 +836,49 @@ impl GameState {
         // Draw game over overlay
         if self.game_over {
             draw_rectangle(0.0, 0.0, 800.0, 600.0, Color::from_rgba(0, 0, 0, 200));
-            let text = if self.victory { "VICTORY!" } else { "GAME OVER" };
-            let color = if self.victory { GREEN } else { RED };
-            let dims = measure_text(text, None, 60, 1.0);
-            draw_text(text, 400.0 - dims.width / 2.0, 250.0, 60.0, color);
-            draw_text(
-                &format!("Final Score: {}", self.player.score),
-                300.0,
-                320.0,
-                30.0,
-                WHITE,
-            );
+            
+            if self.game_mode == GameMode::Solo {
+                // In Solo mode, show who won
+                let winner_text = if self.player.is_game_over() {
+                    "PLAYER 2 WINS!"
+                } else {
+                    "PLAYER 1 WINS!"
+                };
+                let dims = measure_text(winner_text, None, 60, 1.0);
+                draw_text(winner_text, 320.0 - dims.width / 2.0, 250.0, 60.0, YELLOW);
+                
+                draw_text(
+                    &format!("P1 Score: {}", self.player.score),
+                    240.0,
+                    320.0,
+                    20.0,
+                    WHITE,
+                );
+                
+                if let Some(ref player2) = self.player2 {
+                    draw_text(
+                        &format!("P2 Score: {}", player2.score),
+                        240.0,
+                        350.0,
+                        20.0,
+                        WHITE,
+                    );
+                }
+            } else {
+                // Coop mode game over
+                let text = if self.victory { "VICTORY!" } else { "GAME OVER" };
+                let color = if self.victory { GREEN } else { RED };
+                let dims = measure_text(text, None, 60, 1.0);
+                draw_text(text, 320.0 - dims.width / 2.0, 250.0, 60.0, color);
+                draw_text(
+                    &format!("Final Score: {}", self.player.score),
+                    240.0,
+                    320.0,
+                    20.0,
+                    WHITE,
+                );
+            }
+            
             draw_text("Press ENTER to return to menu", 220.0, 370.0, 20.0, WHITE);
         }
     }

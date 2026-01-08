@@ -10,7 +10,7 @@ impl MenuState {
     pub fn new() -> Self {
         Self {
             selected_option: 0,
-            options: vec!["1 Player", "2 Players", "Quit"],
+            options: vec!["1 Player", "2 Players", "Solo (PvP)", "Quit"],
         }
     }
     
@@ -133,7 +133,8 @@ impl MenuState {
             match self.selected_option {
                 0 => AppState::Game(super::GameState::new_with_players(1)),
                 1 => AppState::Game(super::GameState::new_with_players(2)),
-                2 => AppState::Quit,
+                2 => AppState::Game(super::GameState::new_solo()),
+                3 => AppState::Quit,
                 _ => AppState::Menu(self),
             }
         } else {
