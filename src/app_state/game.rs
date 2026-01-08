@@ -8,6 +8,7 @@ use crate::Resources;
 pub struct GameState {
     player: Player,
     player2: Option<Player>,
+    #[allow(dead_code)]
     num_players: u8,
     enemies: Vec<Enemy>,
     bullets: Vec<Bullet>,
@@ -27,6 +28,7 @@ pub struct GameState {
 }
 
 impl GameState {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::new_with_players(1)
     }
