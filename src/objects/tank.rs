@@ -4,6 +4,7 @@ use macroquad::prelude::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TankType {
     Player,
+    Player2,
     BasicEnemy,
     FastEnemy,
     PowerEnemy,
@@ -25,7 +26,7 @@ pub struct Tank {
 impl Tank {
     pub fn new(x: f32, y: f32, tank_type: TankType) -> Self {
         let (speed, health, armor) = match tank_type {
-            TankType::Player => (66.0, 3, 0),  // 100 / 1.5
+            TankType::Player | TankType::Player2 => (66.0, 3, 0),  // 100 / 1.5
             TankType::BasicEnemy => (33.0, 1, 0),  // 50 / 1.5
             TankType::FastEnemy => (100.0, 1, 0),  // 150 / 1.5
             TankType::PowerEnemy => (33.0, 1, 0),
@@ -78,7 +79,7 @@ impl Tank {
         
         // Different cooldowns for player vs enemies
         self.fire_cooldown = match self.tank_type {
-            TankType::Player => 0.5,  // 500ms cooldown
+            TankType::Player | TankType::Player2 => 0.5,  // 500ms cooldown
             _ => 2.0,  // 2 second cooldown for enemies
         };
         

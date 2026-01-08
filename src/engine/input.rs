@@ -14,22 +14,41 @@ impl Input {
         is_key_pressed(key)
     }
     
-    pub fn get_movement_direction() -> Option<Direction> {
-        if is_key_down(KeyCode::W) || is_key_down(KeyCode::Up) {
+    pub fn get_player1_movement_direction() -> Option<Direction> {
+        if is_key_down(KeyCode::W)  {
             Some(Direction::Up)
-        } else if is_key_down(KeyCode::S) || is_key_down(KeyCode::Down) {
+        } else if is_key_down(KeyCode::S) {
             Some(Direction::Down)
-        } else if is_key_down(KeyCode::A) || is_key_down(KeyCode::Left) {
+        } else if is_key_down(KeyCode::A) {
             Some(Direction::Left)
-        } else if is_key_down(KeyCode::D) || is_key_down(KeyCode::Right) {
+        } else if is_key_down(KeyCode::D) {
             Some(Direction::Right)
         } else {
             None
         }
     }
     
-    pub fn is_fire_pressed() -> bool {
-        is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter)
+    pub fn is_player1_fire_pressed() -> bool {
+        is_key_pressed(KeyCode::Space)
+    }
+    
+    // Player 2 controls (IJKL for movement)
+    pub fn get_player2_movement_direction() -> Option<Direction> {
+        if is_key_down(KeyCode::Up) {
+            Some(Direction::Up)
+        } else if is_key_down(KeyCode::Down) {
+            Some(Direction::Down)
+        } else if is_key_down(KeyCode::Left) {
+            Some(Direction::Left)
+        } else if is_key_down(KeyCode::Right) {
+            Some(Direction::Right)
+        } else {
+            None
+        }
+    }
+    
+    pub fn is_player2_fire_pressed() -> bool {
+        is_key_pressed(KeyCode::Enter)
     }
 
     #[allow(dead_code)]

@@ -17,8 +17,17 @@ impl Player {
         }
     }
     
+    pub fn new_with_type(x: f32, y: f32, tank_type: TankType) -> Self {
+        Self {
+            tank: Tank::new(x, y, tank_type),
+            lives: 3,
+            score: 0,
+        }
+    }
+    
     pub fn reset_position(&mut self, x: f32, y: f32) {
-        self.tank = Tank::new(x, y, TankType::Player);
+        let tank_type = self.tank.tank_type;
+        self.tank = Tank::new(x, y, tank_type);
     }
     
     pub fn add_score(&mut self, points: i32) {

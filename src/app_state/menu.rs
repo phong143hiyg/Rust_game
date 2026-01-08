@@ -10,7 +10,7 @@ impl MenuState {
     pub fn new() -> Self {
         Self {
             selected_option: 0,
-            options: vec!["Start Game", "Instructions", "Quit"],
+            options: vec!["1 Player", "2 Players", "Quit"],
         }
     }
     
@@ -64,20 +64,75 @@ impl MenuState {
         }
         
         // Draw controls
+        let controls_y = 500.0;
+        let line_height = 25.0;
+        
         draw_text(
-            "Controls: WASD/Arrows - Move, Space - Fire, ESC - Pause",
+            "Controls:",
             50.0,
-            550.0,
+            controls_y,
+            20.0,
+            YELLOW,
+        );
+        
+        draw_text(
+            "Player 1:",
+            70.0,
+            controls_y + line_height,
+            16.0,
+            WHITE,
+        );
+        draw_text(
+            "  W-A-S-D - Move",
+            90.0,
+            controls_y + line_height * 2.0,
             16.0,
             GRAY,
+        );
+        draw_text(
+            "  Space - Fire",
+            90.0,
+            controls_y + line_height * 3.0,
+            16.0,
+            GRAY,
+        );
+        
+        draw_text(
+            "Player 2:",
+            70.0,
+            controls_y + line_height * 4.0,
+            16.0,
+            WHITE,
+        );
+        draw_text(
+            "  Up-Down-Left-Right - Move",
+            90.0,
+            controls_y + line_height * 5.0,
+            16.0,
+            GRAY,
+        );
+        draw_text(
+            "  Enter - Fire",
+            90.0,
+            controls_y + line_height * 6.0,
+            16.0,
+            GRAY,
+        );
+        
+        draw_text(
+            "ESC - Pause",
+            50.0,
+            controls_y + line_height * 7.5,
+            16.0,
+            WHITE,
         );
     }
     
     pub fn next_state(self) -> AppState {
         if is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::Space) {
             match self.selected_option {
-                0 => AppState::Game(super::GameState::new()),
-                1 => AppState::Menu(self), // Instructions would be another state
+                0 => AppState::Game(super::GameState::new_with_players(1)),
+                1 => AppState::Game(super::GameState::new_with_players(2)),
                 2 => AppState::Quit,
                 _ => AppState::Menu(self),
             }

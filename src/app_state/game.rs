@@ -7,6 +7,8 @@ use crate::Resources;
 
 pub struct GameState {
     player: Player,
+    player2: Option<Player>,
+    num_players: u8,
     enemies: Vec<Enemy>,
     bullets: Vec<Bullet>,
     bricks: Vec<Brick>,
@@ -26,8 +28,18 @@ pub struct GameState {
 
 impl GameState {
     pub fn new() -> Self {
+        Self::new_with_players(1)
+    }
+    
+    pub fn new_with_players(num_players: u8) -> Self {
         let mut state = Self {
-            player: Player::new(300.0, 400.0),
+            player: Player::new(250.0, 400.0),
+            player2: if num_players == 2 {
+                Some(Player::new_with_type(350.0, 400.0, TankType::Player2))
+            } else {
+                None
+            },
+            num_players,
             enemies: Vec::new(),
             bullets: Vec::new(),
             bricks: Vec::new(),
@@ -57,15 +69,20 @@ impl GameState {
         self.bonuses.clear();
         
         // Reset player and eagle positions
-        self.player.reset_position(300.0, 400.0);
-        self.eagle = Eagle::new(300.0, 400.0); // Move eagle away from bottom wall
+        self.player.reset_position(200.0, 400.0);
+        if let Some(ref mut p2) = self.player2 {
+            p2.reset_position(400.0, 400.0);
+        }
+        self.eagle = Eagle::new(300.0, 540.0); // Eagle at bottom
         
         // Define protected zones (no bricks allowed)
         let protected_zones = vec![
-            // Player spawn area (3x3 tiles around player)
-            (8, 11, 11, 14),
-            // Eagle area with protective walls (5x5 tiles)
-            (7, 12, 10, 14),
+            // Player 1 spawn area
+            (4, 8, 11, 14),
+            // Player 2 spawn area  
+            (11, 15, 11, 14),
+            // Eagle area with protective walls and entrance
+            (7, 12, 13, 18),
             // Enemy spawn areas
             (2, 5, 1, 3),
             (7, 10, 1, 3),
@@ -83,11 +100,11 @@ impl GameState {
         }
         
         // Add protective brick walls around the eagle (breakable)
-        // Eagle is at tile position (9, 12) - at (300, 400) in pixels = (300/32, 400/32) = (9.375, 12.5)
+        // Eagle is at tile position (9, 16) - at (300, 540) in pixels = (300/32, 540/32) = (9.375, 16.875)
         let eagle_tile_x = 9;
-        let eagle_tile_y = 12;
+        let eagle_tile_y = 16;
         
-        // Create a box of breakable bricks around the eagle
+        // Create a complete box of breakable bricks around the eagle
         for dx in -2..=2_i32 {
             for dy in -2..=2_i32 {
                 let tx = eagle_tile_x + dx;
@@ -95,7 +112,7 @@ impl GameState {
                 
                 // Only place bricks on the perimeter, not inside or on the eagle
                 let is_perimeter = dx.abs() == 2 || dy.abs() == 2;
-                let not_on_eagle = !(dx.abs() <= 0 && dy.abs() <= 0);
+                let not_on_eagle = !(dx == 0 && dy == 0);
                 
                 if is_perimeter && not_on_eagle && tx > 0 && tx < 19 && ty > 0 && ty < 19 {
                     self.bricks.push(Brick::new(tx as f32 * 32.0, ty as f32 * 32.0, brick::BrickType::Normal));
@@ -183,26 +200,75 @@ impl GameState {
             return;
         }
         
-        // Player movement
-        if let Some(direction) = Input::get_movement_direction() {
+        // Player 1 movement
+        if let Some(direction) = Input::get_player1_movement_direction() {
             // Calculate potential new position
             let (dx, dy) = direction.to_velocity(self.player.tank.speed * get_frame_time());
             let new_pos = Point::new(self.player.tank.position.x + dx, self.player.tank.position.y + dy);
             
             // Check if move is valid (not colliding with map or other tanks)
-            if self.can_tank_move_to(new_pos, &self.collision_map, &self.enemies) {
+            let mut can_move = self.can_tank_move_to(new_pos, &self.collision_map, &self.enemies);
+            
+            // Also check collision with player 2
+            if let Some(ref player2) = self.player2 {
+                let new_bounds = Rect::new(new_pos.x as i32, new_pos.y as i32, 32, 32);
+                if new_bounds.intersects(&player2.tank.get_bounds()) {
+                    can_move = false;
+                }
+            }
+            
+            if can_move {
                 self.player.tank.direction = direction;
                 self.player.tank.position = new_pos;
             }
         }
         
-        // Player fire
-        if Input::is_fire_pressed() {
+        // Player 1 fire
+        if Input::is_player1_fire_pressed() {
             // Check if player already has an active bullet
             let has_active_bullet = self.bullets.iter().any(|b| b.is_active && b.owner_type == TankType::Player);
             if !has_active_bullet {
                 if let Some(bullet) = self.player.tank.fire() {
                     self.bullets.push(bullet);
+                }
+            }
+        }
+        
+        // Player 2 movement and fire (if exists)
+        let player2_new_pos = if let Some(ref player2) = self.player2 {
+            Input::get_player2_movement_direction().map(|direction| {
+                let (dx, dy) = direction.to_velocity(player2.tank.speed * get_frame_time());
+                let new_pos = Point::new(player2.tank.position.x + dx, player2.tank.position.y + dy);
+                (direction, new_pos)
+            })
+        } else {
+            None
+        };
+        
+        if let Some((direction, new_pos)) = player2_new_pos {
+            let mut can_move = self.can_tank_move_to(new_pos, &self.collision_map, &self.enemies);
+            
+            // Also check collision with player 1
+            let new_bounds = Rect::new(new_pos.x as i32, new_pos.y as i32, 32, 32);
+            if new_bounds.intersects(&self.player.tank.get_bounds()) {
+                can_move = false;
+            }
+            
+            if can_move {
+                if let Some(ref mut player2) = self.player2 {
+                    player2.tank.direction = direction;
+                    player2.tank.position = new_pos;
+                }
+            }
+        }
+        
+        if let Some(ref mut player2) = self.player2 {
+            if Input::is_player2_fire_pressed() {
+                let has_active_bullet = self.bullets.iter().any(|b| b.is_active && b.owner_type == TankType::Player2);
+                if !has_active_bullet {
+                    if let Some(bullet) = player2.tank.fire() {
+                        self.bullets.push(bullet);
+                    }
                 }
             }
         }
@@ -224,6 +290,11 @@ impl GameState {
         
         // Update player
         self.player.update(dt);
+        
+        // Update player 2 if exists
+        if let Some(ref mut player2) = self.player2 {
+            player2.update(dt);
+        };
         
         // Update enemies
         for i in 0..self.enemies.len() {
@@ -305,7 +376,14 @@ impl GameState {
         }
         
         if !self.eagle.is_alive || self.player.is_game_over() {
-            self.game_over = true;
+            // In 2 player mode, check if both players are out
+            if let Some(ref player2) = self.player2 {
+                if player2.is_game_over() {
+                    self.game_over = true;
+                }
+            } else {
+                self.game_over = true;
+            }
         }
     }
     
@@ -337,14 +415,29 @@ impl GameState {
                     if !self.player.tank.is_alive {
                         self.player.lose_life();
                         if !self.player.is_game_over() {
-                            self.player.reset_position(300.0, 400.0);
+                            self.player.reset_position(200.0, 400.0);
+                        }
+                    }
+                }
+                
+                // Bullet vs Player 2
+                if let Some(ref mut player2) = self.player2 {
+                    if bullet.get_bounds().intersects(&player2.tank.get_bounds()) {
+                        player2.tank.take_damage(bullet.damage);
+                        bullet.deactivate();
+                        
+                        if !player2.tank.is_alive {
+                            player2.lose_life();
+                            if !player2.is_game_over() {
+                                player2.reset_position(400.0, 400.0);
+                            }
                         }
                     }
                 }
             }
             
             // Bullet vs Enemies
-            if bullet.owner_type == TankType::Player {
+            if matches!(bullet.owner_type, TankType::Player | TankType::Player2) {
                 for enemy in &mut self.enemies {
                     if enemy.tank.is_alive && bullet.get_bounds().intersects(&enemy.tank.get_bounds()) {
                         enemy.tank.take_damage(bullet.damage);
@@ -352,7 +445,15 @@ impl GameState {
                         
                         if !enemy.tank.is_alive {
                             self.enemies_killed += 1;
-                            self.player.add_score(100);
+                            
+                            // Only add score to the player who shot
+                            if bullet.owner_type == TankType::Player {
+                                self.player.add_score(100);
+                            } else if bullet.owner_type == TankType::Player2 {
+                                if let Some(ref mut player2) = self.player2 {
+                                    player2.add_score(100);
+                                }
+                            }
                             
                             // Chance to spawn bonus
                             if macroquad::rand::rand() % 100 < 20 {
@@ -398,6 +499,22 @@ impl GameState {
                     BonusType::Speed => self.player.tank.speed = 150.0,
                     BonusType::Power => {
                         // Power up bullets
+                    }
+                }
+            }
+            
+            // Player 2 vs Bonus
+            if let Some(ref mut player2) = self.player2 {
+                if !bonus.is_collected && player2.tank.get_bounds().intersects(&bonus.get_bounds()) {
+                    bonus.is_collected = true;
+                    
+                    match bonus.bonus_type {
+                        BonusType::ExtraLife => player2.lives += 1,
+                        BonusType::Shield => player2.tank.armor_level += 1,
+                        BonusType::Speed => player2.tank.speed = 150.0,
+                        BonusType::Power => {
+                            // Power up bullets
+                        }
                     }
                 }
             }
@@ -525,6 +642,11 @@ impl GameState {
         // Draw player
         self.player.draw(&resources.player_tank);
         
+        // Draw player 2 if exists
+        if let Some(ref player2) = self.player2 {
+            player2.draw(&resources.player_tank);
+        };
+        
         // Draw enemies
         for enemy in &self.enemies {
             let texture = match enemy.tank.tank_type {
@@ -543,19 +665,35 @@ impl GameState {
         }
         
         // Draw HUD
-        draw_text(&format!("Lives: {}", self.player.lives), 650.0, 30.0, 20.0, WHITE);
-        draw_text(&format!("Score: {}", self.player.score), 650.0, 60.0, 20.0, WHITE);
-        draw_text(&format!("Level: {}/{}", self.level, self.max_level), 650.0, 90.0, 20.0, YELLOW);
-        draw_text(&format!("Enemies: {}/{}", self.enemies_killed, self.total_enemies), 650.0, 120.0, 20.0, WHITE);
-        draw_text(&format!("Active: {}", self.enemies.len()), 650.0, 150.0, 20.0, WHITE);
+        draw_text(&format!("P1 Lives: {}", self.player.lives), 650.0, 30.0, 20.0, WHITE);
+        draw_text(&format!("P1 Score: {}", self.player.score), 650.0, 60.0, 20.0, WHITE);
+        
+        // Draw player 2 HUD if exists
+        if let Some(ref player2) = self.player2 {
+            draw_text(&format!("P2 Lives: {}", player2.lives), 650.0, 90.0, 20.0, YELLOW);
+            draw_text(&format!("P2 Score: {}", player2.score), 650.0, 120.0, 20.0, YELLOW);
+        }
+        
+        let hud_offset = if self.player2.is_some() { 150.0 } else { 90.0 };
+        draw_text(&format!("Level: {}/{}", self.level, self.max_level), 650.0, hud_offset, 20.0, YELLOW);
+        draw_text(&format!("Enemies: {}/{}", self.enemies_killed, self.total_enemies), 650.0, hud_offset + 30.0, 20.0, WHITE);
+        draw_text(&format!("Active: {}", self.enemies.len()), 650.0, hud_offset + 60.0, 20.0, WHITE);
         
         // Draw pause overlay
         if self.paused {
             draw_rectangle(0.0, 0.0, 800.0, 600.0, Color::from_rgba(0, 0, 0, 180));
+            
             let text = "PAUSED";
             let dims = measure_text(text, None, 60, 1.0);
-            draw_text(text, 400.0 - dims.width / 2.0, 300.0, 60.0, YELLOW);
-            draw_text("Press ESC to resume", 250.0, 350.0, 20.0, WHITE);
+            draw_text(text, 320.0 - dims.width / 2.0, 280.0, 60.0, YELLOW);
+            
+            let text2 = "Press ESC to resume";
+            let dims2 = measure_text(text2, None, 20, 1.0);
+            draw_text(text2, 320.0 - dims2.width / 2.0, 340.0, 20.0, WHITE);
+            
+            let text3 = "Press Backspace to quit to menu";
+            let dims3 = measure_text(text3, None, 20, 1.0);
+            draw_text(text3, 320.0 - dims3.width / 2.0, 370.0, 20.0, WHITE);
         }
         
         // Draw game over overlay
@@ -577,6 +715,11 @@ impl GameState {
     }
     
     pub fn next_state(self) -> AppState {
+        // Check if player wants to quit to menu (Backspace when paused)
+        if self.paused && is_key_pressed(KeyCode::Backspace) {
+            return AppState::Menu(super::MenuState::new());
+        }
+        
         if self.game_over && (is_key_pressed(KeyCode::Enter) || is_key_pressed(KeyCode::Escape)) {
             AppState::Menu(super::MenuState::new())
         } else {
