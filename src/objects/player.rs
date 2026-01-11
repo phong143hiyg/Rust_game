@@ -48,5 +48,30 @@ impl Player {
     
     pub fn draw(&self, texture: &Texture2D) {
         self.tank.draw(texture);
+        
+        // Draw player label above tank
+        let label = match self.tank.tank_type {
+            TankType::Player => "P1",
+            TankType::Player2 => "P2",
+            _ => "",
+        };
+        
+        if !label.is_empty() {
+            let color = match self.tank.tank_type {
+                TankType::Player => WHITE,
+                TankType::Player2 => YELLOW,
+                _ => WHITE,
+            };
+            
+            let text_size = 14.0;
+            let dims = measure_text(label, None, text_size as u16, 1.0);
+            draw_text(
+                label,
+                self.tank.position.x + 16.0 - dims.width / 2.0,
+                self.tank.position.y - 8.0,
+                text_size,
+                color,
+            );
+        }
     }
 }
